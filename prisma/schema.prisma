@@ -1,0 +1,107 @@
+// Prisma schema for the quiz app.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  username     String   @unique
+  passwordHash String
+  role         String   @default("PARTICIPANT") // PARTICIPANT | ORGANIZER
+  createdAt    DateTime @default(now())
+
+  quizzes      Quiz[]    @relation("OwnedQuizzes")
+  rooms        Room[]    @relation("HostedRooms")
+  participants Participant[]
+}
+
+model Quiz {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  ownerId     String
+  owner       User       @relation("OwnedQuizzes", fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  questions   Question[]
+  rooms       Room[]
+}
+
+model Question {
+  id          String   @id @default(cuid())
+  quizId      String
+  quiz        Quiz     @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  position    Int
+  text        String
+  imageUrl    String?
+  // single | multiple
+  type        String   @default("single")
+  // seconds
+  timeLimit   Int      @default(20)
+  points      Int      @default(1000)
+  options     Option[]
+}
+
+model Option {
+  id         String   @id @default(cuid())
+  questionId String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  text       String
+  isCorrect  Boolean  @default(false)
+  position   Int      @default(0)
+}
+
+model Room {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  quizId        String
+  quiz          Quiz          @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  hostId        String
+  host          User          @relation("HostedRooms", fields: [hostId], references: [id], onDelete: Cascade)
+  // lobby | running | finished
+  status        String        @default("lobby")
+  currentIndex  Int           @default(-1)
+  questionStart DateTime?
+  createdAt     DateTime      @default(now())
+  finishedAt    DateTime?
+
+  participants  Participant[]
+  answers       Answer[]
+}
+
+model Participant {
+  id        String   @id @default(cuid())
+  roomId    String
+  room      Room     @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  nickname  String
+  score     Int      @default(0)
+  joinedAt  DateTime @default(now())
+
+  answers   Answer[]
+
+  @@unique([roomId, nickname])
+}
+
+model Answer {
+  id            String      @id @default(cuid())
+  roomId        String
+  room          Room        @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  questionId    String
+  // JSON-encoded array of selected option ids
+  optionIds     String
+  isCorrect     Boolean     @default(false)
+  awardedPoints Int         @default(0)
+  answeredAt    DateTime    @default(now())
+
+  @@unique([roomId, participantId, questionId])
+}
